@@ -1,12 +1,9 @@
-------------------------------------------------------------------------
-This is the project README file. Here, you should describe your project.
-Tell the reader (someone who does not know anything about this project)
-all he/she needs to know. The comments should usually include at least:
-------------------------------------------------------------------------
+PROJECT TITLE: PoorPoetry
+PURPOSE OF PROJECT: Work on String Manipulation from CSVFiles
+VERSION or DATE: 8/5/2018
+HOW TO START THIS PROJECT: There is no main method to this code, it is just a set of methods that can be used with provided dataset
+AUTHORS: Bernard Johnson
+USER INSTRUCTIONS: Use the methods as you wish, the only function built in is to read the CSV file provided and send the data through a progression of provided methods to deconstruct a song's lyrics and reconstruct new lines using ArrayLists containing the words used in the given song. 
 
-PROJECT TITLE:
-PURPOSE OF PROJECT:
-VERSION or DATE:
-HOW TO START THIS PROJECT:
-AUTHORS:
-USER INSTRUCTIONS:
+*************NOTE**************
+You will need to use the stanfordNLP library to use certain methods provided.
