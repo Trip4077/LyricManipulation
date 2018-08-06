@@ -1,0 +1,610 @@
+
+/**
+ * A Set Of Methods For Analyzing and Manipulating Data from a CSV File on Musicians
+ * 
+ * Bernard Johnson III
+ * @1
+ */
+
+import edu.duke.*;
+
+import org.apache.commons.csv.*;
+
+import edu.stanford.nlp.coref.data.CorefChain;
+import edu.stanford.nlp.ling.*;
+import edu.stanford.nlp.ie.util.*;
+import edu.stanford.nlp.pipeline.*;
+import edu.stanford.nlp.semgraph.*;
+import edu.stanford.nlp.trees.*;
+import edu.stanford.nlp.process.CoreLabelTokenFactory;
+import edu.stanford.nlp.process.PTBTokenizer;
+
+import simplenlg.syntax.english.*;
+import simplenlg.framework.*;
+import simplenlg.lexicon.*;
+import simplenlg.realiser.english.*;
+import simplenlg.phrasespec.*;
+import simplenlg.features.*;
+
+import java.util.*;
+
+import java.io.FileInputStream; 
+import java.io.InputStream;  
+
+import java.io.*;
+import java.io.FileInputStream; 
+import java.io.InputStream;
+
+import java.util.*;
+import java.util.ArrayList;
+import java.util.Scanner;
+import java.util.regex.*;
+import java.util.Collections;
+
+import edu.stanford.nlp.util.logging.Redwood;
+
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.util.List;
+
+import edu.stanford.nlp.ling.SentenceUtils;
+import edu.stanford.nlp.ling.TaggedWord;
+import edu.stanford.nlp.ling.HasWord;
+import edu.stanford.nlp.tagger.maxent.MaxentTagger;
+
+public class PoorPoetry {
+
+    //Determine the number of songs on file
+    public int numSongs(FileResource fr) {
+     int numSongs = 0;
+     String prevSong = "";
+     
+     CSVParser parser = fr.getCSVParser();
+     //For each record in file, get song name and compare to previous record name
+     for (CSVRecord rec : parser) {
+         String songName = rec.get(2);
+         //If the previous song name does not equal current song name, count new song
+         if (!prevSong.equals(songName)){
+             numSongs += 1;
+         } 
+         //Update working song
+         prevSong = songName;
+     }
+     return numSongs; 
+    }
+    
+    //Determine the number of songs on a single album
+    public int numSongsOnAlbum(FileResource fr) {
+        
+        int numSongs = 0;
+        String prevSong = " ";
+        
+        System.out.println("Enter the Album Name to Search: ");
+        while(true) {
+            //Get user input to determine the album to search for
+            Scanner input = new Scanner(System.in);
+            String album = input.nextLine();
+
+            numSongs = 0;
+            CSVParser parser = fr.getCSVParser();
+            //For every record in file, compare album name to name on record, increasing song count if it's a match
+            for (CSVRecord rec : parser) {
+                //Find the album name that matches user input
+                if (album.equals(rec.get(1))){
+                    String songName = rec.get(2);
+                    if (!prevSong.equals(songName)){
+                        numSongs += 1;
+                    }
+                    prevSong = songName;    
+                }   
+            }
+            //Display Final Results
+            System.out.println("Number of songs on " + album + " is " + numSongs);
+            //Ask user if another search is needed, this will clear all data from current search
+            System.out.println("Search Again? [Y/N] ");
+            char ans = input.next(".").charAt(0);
+
+            if (ans == 'N' || ans == 'n') {
+                break;
+            }         
+            prevSong = "";
+        }
+        return numSongs;
+    }
+    
+    //Enter a word or phrase to search for and record number of times used across file
+    public int searchPhrase(FileResource fr) {
+        
+        int phraseCount = 0;
+        
+        System.out.println("Enter the Lyric Phrase to Search: ");
+        while(true) {
+            //Get user input for desired phrase to search
+            Scanner input = new Scanner(System.in);
+            String searchPhrase = input.nextLine(); 
+            
+            int continueCount = 0;
+            
+            CSVParser parser = fr.getCSVParser();
+            //For every record in file, get lyrics and search for phrase
+            for (CSVRecord rec : parser) {
+                String lyric = rec.get(4).toLowerCase() ;
+                int startIndex = lyric.indexOf(searchPhrase);
+                //If the phrase is found, increase count and display current count + lyric line
+                while(startIndex != -1) {
+                    phraseCount += 1;
+                    startIndex = lyric.indexOf(searchPhrase, startIndex+searchPhrase.length());
+
+                    System.out.println(phraseCount + ": " + lyric);                          
+                }
+            }
+            //Display Final Results
+            System.out.println("The number of times " + searchPhrase + " is used is " + phraseCount);
+            //Ask user if another search is needed, this will clear all data from current search
+            System.out.println("Search Again? [Y/N] ");
+            char ans = input.next(".").charAt(0);
+
+            if (ans == 'N' || ans == 'n') {
+                break;
+            }         
+           phraseCount = 0;
+        }
+        return phraseCount;
+    }
+    
+    //Used to remove copies of words out of an array
+    public ArrayList<String> minimizeArray(ArrayList<String> array) {
+        //Get the first word in the array as starting point
+        String tempWord = array.get(0);
+        tempWord.toLowerCase();
+        
+        String newWord = null;
+        int index = 0;
+        
+        //For each array item, determine if word is a copy, remove if true
+        for(int i = 0; i < array.size();) {
+            newWord = array.get(i);
+            newWord.toLowerCase();
+            //Remove word copy or get new word and advance in array
+            if (tempWord.equals(newWord)){  
+                array.remove(i);
+            }
+            else {
+                tempWord = newWord;
+                i += 1;
+            }
+        }
+        return array;
+    }
+    
+    //Pulls lyrics out of CSV file by record and stores in array
+    public ArrayList getLyricLines(FileResource fr) {
+        ArrayList<String> array = new ArrayList<String>();    
+        
+        System.out.println("Enter the Track Title to Search: ");
+        //Each iteration of search
+        while (true) {
+            //Get user input for song title to search
+            Scanner input = new Scanner(System.in);
+            
+            String trackTitle = input.nextLine();
+            //Clears array for new search
+            array.clear();                                      
+            
+            StringBuilder builder = new StringBuilder();
+            CSVParser parser = fr.getCSVParser();
+            
+            for (CSVRecord rec : parser) {
+                //Compare song name to name on record in file to determine if it should be stored
+                if (trackTitle.equals(rec.get(2))) {
+                    array.add(rec.get(4));
+                    System.out.println(rec.get(4));
+                }
+                else {
+                    //Determine start or end of song lyrics
+                    if (array.isEmpty()) {
+                        continue;
+                    }
+                    else {
+                        break;
+                    }
+                }
+                
+            }
+            //If song does not exist in file
+            if (array.isEmpty()) {
+                System.out.println("No Track found");
+            }
+            //Ask user if another search is needed, this will clear all data from current search
+            System.out.println("Search Again? [Y/N] ");
+            char ans = input.next(".").charAt(0);
+
+            if (ans == 'N' || ans == 'n') {
+                break;
+            }         
+        }
+        
+        return array;
+    }
+    //Use stnadfordNLP library to tokenize an array of strings and add part of speech tag
+    public ArrayList tokenizeLinesWithPOS(ArrayList<String> lyricLines) {
+        ArrayList<String> tokens = new ArrayList<String>();      
+        String tokenLine;
+        //For every line in array, tokenize and label words
+        for (String line : lyricLines) {
+            MaxentTagger tagger = new MaxentTagger("stanford-postagger-2018-02-27/models/english-left3words-distsim.tagger");
+            String taggedLine = tagger.tagString(line);
+            
+            System.out.println(taggedLine);
+            
+            Reader r = new StringReader(taggedLine);
+            PTBTokenizer<Word> tokenizer = PTBTokenizer.newPTBTokenizer(r);
+
+            
+            while(tokenizer.hasNext()) {
+                Word w = tokenizer.next();
+                tokens.add(w.word());
+                
+            }
+            
+        }
+        Collections.sort(tokens);
+        
+        //System.out.println(tokens);
+        return tokens;
+    }
+    //Separates tokenized words from above method into new arrays based on part of speech
+    public ArrayList categorizePOS(ArrayList<String> tokens) {
+        //Arrays for each part of speech
+        ArrayList<String> nounList = new ArrayList<String>();
+        ArrayList<String> subjectList = new ArrayList<String>();
+        ArrayList<String> objectList = new ArrayList<String>();
+        ArrayList<String> verbList = new ArrayList<String>();
+        ArrayList<String> adjList = new ArrayList<String>();
+        ArrayList<String> adverbList = new ArrayList<String>();
+        ArrayList<String> prepList = new ArrayList<String>();
+        ArrayList<String> articlesList = new ArrayList<String>();
+        //Array for arrays of POS
+        ArrayList<ArrayList<String>> posLists = new ArrayList<ArrayList<String>>();
+            //For each string check for POS tag, remove tag, and add to new array
+            for (String s : tokens) {
+                 s = s.toUpperCase();
+                //Nouns
+                if ( s.indexOf("_NNPS") != -1) {
+                    s = s.replace("_NNPS", "");
+                    s = s.toLowerCase();
+                    objectList.add(s);
+                    subjectList.add(s);
+                }
+                else if (s.indexOf("_NNP") != -1) {
+                    s = s.replace("_NNP", "");
+                    s = s.toLowerCase();
+                    objectList.add(s);
+                    subjectList.add(s);                    
+                }
+                else if (s.indexOf("_NNS") != -1) {
+                    s = s.replace("_NNS", "");
+                    s = s.toLowerCase();
+                    objectList.add(s);
+                    subjectList.add(s);                    
+                }
+                else if (s.indexOf("_NN") != -1) {
+                    s = s.replace("_NN", "");
+                    s = s.toLowerCase();
+                    objectList.add(s);
+                    subjectList.add(s);
+                }
+                else if (s.indexOf("_PRP") != -1 || s.indexOf("_PRP$") != -1) {
+                    s = s.replace("_PRP", "");
+                    
+                    if (s.equals("YOUR") || s.equals("THEIR") || s.equals("OUR")) {
+                        s = s.toLowerCase();
+                        subjectList.add(s);
+                    }
+                    else if (s.equals("HE") || s.equals("I") || s.equals("SHE") || s.equals("IT") || s.equals("YOU") || s.equals("THEY") || s.equals("WE")) {
+                        
+                        if (s.equals("I")) {
+                            subjectList.add(s);
+                        }
+                        else {
+                            s = s.toLowerCase();
+                            subjectList.add(s);
+                        }
+                    }
+                    else if (s.equals("ME") || s.equals("HIM") || s.equals ("HER") || s.equals("US") || s.equals("THEM")) {
+                        s = s.toLowerCase();
+                        s = s.toLowerCase();
+                        objectList.add(s);
+                    }
+                    else if (s.equals("MY")) {
+                        s = s.toLowerCase();
+                        s = s.toLowerCase();
+                        adjList.add(s);
+                    }
+                    else {
+                        s = s.toLowerCase();
+                        s = s.toLowerCase();
+                        objectList.add(s);
+                        subjectList.add(s);
+                    }                  
+                }
+                //Verbs
+                else if (s.indexOf("_VBZ") != -1) {
+                    s = s.replace("_VBZ", "");
+                    s = s.toLowerCase();
+                    verbList.add(s);                    
+                }
+                else if (s.indexOf("_VBP") != -1) {
+                    s = s.replace("_VBP", "");
+                    s = s.toLowerCase();
+                    verbList.add(s);                    
+                }
+                else if (s.indexOf("_VBN") != -1) {
+                    s = s.replace("_VBN", "");
+                    s = s.toLowerCase();
+                    verbList.add(s);                    
+                }
+                else if (s.indexOf("_VBG") != -1) {
+                    s = s.replace("_VBG", "");
+                    s = s.toLowerCase();
+                    verbList.add(s);                    
+                }
+                else if (s.indexOf("_VBD") != -1) {
+                    s = s.replace("_VBD", "");
+                    s = s.toLowerCase();
+                    verbList.add(s);                 
+                }
+                else if (s.indexOf("_VB") != -1) {
+                    s = s.replace("_VB", "");
+                    s = s.toLowerCase();
+                    verbList.add(s);                    
+                }
+                //Adjectives
+                else if (s.indexOf("_JJS") != -1) {
+                    s = s.replace("_JJS", "");
+                    s = s.toLowerCase();
+                    adjList.add(s);                    
+                }
+                else if (s.indexOf("_JJR") != -1) {
+                    s = s.replace("_JJR", "");
+                    s = s.toLowerCase();
+                    adjList.add(s);                    
+                }
+                else if (s.indexOf("_JJ") != -1) {
+                    s = s.replace("_JJ", "");
+                    s = s.toLowerCase();
+                    adjList.add(s);                    
+                }
+                //Adverbs
+                else if (s.indexOf("_RBS") != -1) {
+                    s = s.replace("_RBS", "");
+                    s = s.toLowerCase();
+                    
+                    if(s.equals("on") || s.equals("hey")) {
+                        continue;
+                    }
+                    else {
+                        adverbList.add(s); 
+                    }                   
+                }
+                else if (s.indexOf("_RBR") != -1) {
+                    s = s.replace("_RBR", "");
+                    s = s.toLowerCase();
+
+                    if(s.equals("on") || s.equals("hey")) {
+                        continue;
+                    }
+                    else {
+                        adverbList.add(s); 
+                    }  
+                }
+                else if (s.indexOf("_RB") != -1) {
+                    s = s.replace("_RB", "");
+                    s = s.toLowerCase();
+                    if(s.equals("on") || s.equals("hey")) {
+                        continue;
+                    }
+                    else {
+                        adverbList.add(s); 
+                    }                     
+                }
+                //Prepositional words
+                else if (s.indexOf("_IN") != -1) {
+                    s = s.replace("_IN", "");
+                    s = s.toLowerCase();
+                    prepList.add(s);                    
+                }
+                else if (s.indexOf("_TO") != -1) {
+                    s = s.replace("_TO", "");
+                    s = s.toLowerCase();
+                    prepList.add(s);                    
+                }
+                //Articles
+                else if (s.indexOf("_DT") != -1) {
+                    s = s.replace("_DT", "");
+                    
+                    if (s.equals("ALL")) {
+                        continue;
+                    }
+                    else{
+                        s = s.toLowerCase();         
+                        articlesList.add(s);
+                    }
+                }
+             
+            }
+        //Remove duplicate words from array
+        minimizeArray(subjectList);    
+        minimizeArray(verbList);    
+        minimizeArray(adjList);
+        minimizeArray(adverbList);
+        minimizeArray(prepList);
+        minimizeArray(articlesList);
+        minimizeArray(objectList);
+        //Combine all arrays into single Array
+        posLists.add(subjectList);
+        posLists.add(verbList);
+        posLists.add(adjList);
+        posLists.add(adverbList);
+        posLists.add(prepList);
+        posLists.add(articlesList);
+        posLists.add(objectList);
+        
+        /*
+        System.out.println("***********PRE TRANSFER************");
+        System.out.println("\nSubject Nouns: " + subjectList + "\n");
+        System.out.println("Verbs: " + verbList + "\n");
+        System.out.println("Adjectives: " + adjList + "\n");
+        System.out.println("Adverbs: " + adverbList + "\n");
+        System.out.println("Preposition: " + prepList + "\n");
+        System.out.println("Articles: " + articlesList + "\n");
+        System.out.println("Object Nouns: " + objectList + "\n");
+        */
+       
+        return posLists; 
+    }
+    //Generate new lyrics using different POS arrays and simpleNLG library (Can be generated from above methods)
+    public ArrayList generateLyrics(ArrayList<ArrayList<String>> posLists) {
+        ArrayList<String> newLyrics = new ArrayList();
+        //Determine number of lines for new song
+        int numLines = 7 + (int)(Math.random() * ((15 - 7) + 1));       
+        //Initialize simpleNLG
+        Lexicon lexicon = Lexicon.getDefaultLexicon();
+        NLGFactory nlgFactory = new NLGFactory(lexicon);
+        Realiser realiser = new Realiser(lexicon);
+        //Break apart array of arrays into indiviual POS arrays
+        ArrayList<String> nounList = posLists.get(0);
+        ArrayList<String> verbList = posLists.get(1);
+        ArrayList<String> adjList = posLists.get(2);
+        ArrayList<String> adverbList = posLists.get(3);
+        ArrayList<String> prepList = posLists.get(4);
+        ArrayList<String> articleList = posLists.get(5);
+        ArrayList<String> objectList = posLists.get(6);
+        
+        /*
+        System.out.println("***********POST TRANSFER************");
+        System.out.println("\nSubject Nouns: " + nounList + "\n");
+        System.out.println("Verbs: " + verbList + "\n");
+        System.out.println("Adjectives: " + adjList + "\n");
+        System.out.println("Adverbs: " + adverbList + "\n");
+        System.out.println("Preposition: " + prepList + "\n");
+        System.out.println("Articles: " + articleList + "\n");
+        System.out.println("Object Nouns: " + objectList + "\n");
+        */
+        
+       //Determine setence tense for newLyrics
+        int tense = 1 + (int)(Math.random() * ((3 - 1) + 1)); 
+        //For the number of lines given, determine number of words per line, and construct new line phrases
+        while (numLines > 0) {
+            SPhraseSpec lyric = nlgFactory.createClause();
+            String lyricLine = "";
+            //Determine number of words for line
+            int numWords = 3 + (int)(Math.random() * ((4 - 3) + 1));
+            //Determining value for choice sections
+            int choice = 0 + (int)(Math.random() * ((1 - 0) + 1));
+            
+            if (numWords == 3) {
+                //Full Sentence (1) or Fragment (0)
+                if (choice == 1) {                    
+                    lyric.setSubject(nounList.get((int)(Math.random()*nounList.size())));
+                    lyric.setVerb(verbList.get((int)(Math.random()*verbList.size())));
+                    lyric.setObject(objectList.get((int)(Math.random()*objectList.size())));
+                }
+                else { 
+                    PPPhraseSpec pp = nlgFactory.createPrepositionPhrase(prepList.get((int)(Math.random()*prepList.size())), (articleList.get((int)(Math.random()*articleList.size())) +" "+ objectList.get((int)(Math.random()*objectList.size())))); 
+                    lyric.addComplement(pp);
+                }
+            }
+            else if (numWords == 4) {
+                //Add adjective (1) or adverb (0)
+                if (choice == 1) {
+                    //Reset choice value
+                    choice = 0 + (int)(Math.random() * ((1 - 0) + 1));
+                    //Attach to subject (1) or object (0)
+                    if (choice == 1) {
+                        //Attach Adjective to Subject
+                        NPPhraseSpec subject = nlgFactory.createNounPhrase(nounList.get((int)(Math.random()*nounList.size())));
+                        subject.addModifier(adjList.get((int)(Math.random()*adjList.size())));
+                        
+                        lyric.setSubject(subject);
+                        lyric.setVerb(verbList.get((int)(Math.random()*verbList.size())));
+                        lyric.setObject(objectList.get((int)(Math.random()*objectList.size())));                        
+                    }
+                    else {
+                        //Attach adjective to object
+                        lyric.setSubject(nounList.get((int)(Math.random()*nounList.size())));
+                        lyric.setVerb(verbList.get((int)(Math.random()*verbList.size())));
+                        lyric.setObject(adjList.get((int)(Math.random()*adjList.size())) + " " + objectList.get((int)(Math.random()*objectList.size())));
+                    }
+                }
+                else {
+                    //Attach adverb to verb
+                    VPPhraseSpec verb = nlgFactory.createVerbPhrase(verbList.get((int)(Math.random()*verbList.size())));
+                    verb.addModifier(adverbList.get((int)(Math.random()*adverbList.size())));
+                        
+                    lyric.setSubject(nounList.get((int)(Math.random()*nounList.size())));
+                    lyric.setVerb(verb);
+                    lyric.setObject(objectList.get((int)(Math.random()*objectList.size())));                  
+                }
+                
+            }
+            //Update number of lines, realise new String line and add to return array
+            numLines -= 1;
+            lyricLine = realiser.realiseSentence(lyric);
+            newLyrics.add(lyricLine);
+        }
+        System.out.println(newLyrics);
+        return newLyrics;
+    }
+    //Test methods for troubleshooting and getting familiar with methods and outputs
+    public void testGenerateLyrics() {
+        FileResource fr = new FileResource();
+        ArrayList<String> lyrics = getLyricLines(fr);
+        ArrayList<String> wordTokens = tokenizeLinesWithPOS(lyrics);
+        ArrayList<ArrayList<String>> wordBank = categorizePOS(wordTokens);
+        generateLyrics(wordBank);
+    }
+    
+    public void testCategorizePOS() {
+        FileResource fr = new FileResource();
+        ArrayList<String> lyrics = getLyricLines(fr);
+        ArrayList<String> wordTokens = tokenizeLinesWithPOS(lyrics);
+        categorizePOS(wordTokens);
+        
+    }
+    
+    public void testTokenizeLines() {
+        FileResource fr = new FileResource();
+        ArrayList<String> lyrics = getLyricLines(fr);
+        ArrayList<String> wordTokes = tokenizeLinesWithPOS(lyrics);
+        
+    }
+    
+    public void testNumSongs(){
+        FileResource fr = new FileResource();
+        int numberSongs = numSongs(fr);
+        System.out.println(numberSongs);
+    }
+    
+    public void testNumSongsAlbum() {
+        FileResource fr = new FileResource();
+        numSongsOnAlbum(fr);
+    }
+    
+    public void testSearchPhrase() {
+        FileResource fr = new FileResource();
+        searchPhrase(fr);
+    }
+    
+    public void testLyricLines() {
+        FileResource fr = new FileResource();
+        ArrayList<String> lyrics = getLyricLines(fr);
+        
+        int lineNum = 1;
+        
+        for (String s : lyrics) {
+            System.out.println(lineNum + ") " + s);
+            lineNum += 1;
+        }
+    } 
+}
