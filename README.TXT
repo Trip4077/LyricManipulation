@@ -7,3 +7,5 @@ USER INSTRUCTIONS: Use the methods as you wish, the only function built in is to
 
 *************NOTE**************
 You will need to use the stanfordNLP library to use certain methods provided.
+
+Other libraries include simpleNLG for construction of new lines, edu.duke library for parsing, and apache commons.
